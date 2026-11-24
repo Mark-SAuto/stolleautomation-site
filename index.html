@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NetPulse — Network health at a glance (coming soon)</title>
+<meta name="description" content="NetPulse is a macOS network monitor for engineers and consultants: see at a glance whether a client site is stable or having issues, and hand over a professional report. Coming soon.">
+<meta name="author" content="Stolle Automation">
+<meta name="theme-color" content="#080d18">
+<meta property="og:type" content="website">
+<meta property="og:title" content="NetPulse — Network health at a glance">
+<meta property="og:description" content="The macOS network monitor for engineers and consultants. Know if a site is solid, or exactly what isn't. Coming soon from Stolle Automation.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  /* Layout: dark NOC hero with a live pulse + verdict card, then theme-aware feature/pricing sections. */
+  :root {
+    /* light palette (blue-biased neutrals) */
+    --bg: #ffffff;
+    --surface: #f5f8fc;
+    --surface-2: #eaf0f8;
+    --border: #d8e1ee;
+    --fg: #0c1424;
+    --muted: #586678;
+    --accent: #1f6feb;
+    --accent-strong: #0b4fd1;
+    --accent-soft: rgba(31,111,235,0.10);
+    --good: #15a34a;
+    --warn: #d98a00;
+    --bad: #e02424;
+    /* constants (hero is always dark) */
+    --ink: #080d18;
+    --ink-2: #0e1626;
+    --ink-line: #1c2a44;
+    --ink-fg: #eaf1ff;
+    --ink-muted: #8ea2c4;
+    --ink-accent: #5b9bff;
+    --radius: 16px;
+    --maxw: 1120px;
+    --font-display: "Sora", system-ui, sans-serif;
+    --font-body: "Inter", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #080d18;
+      --surface: #0f1829;
+      --surface-2: #152138;
+      --border: #203050;
+      --fg: #e8eefc;
+      --muted: #94a4c0;
+      --accent: #4f8dff;
+      --accent-strong: #76a8ff;
+      --accent-soft: rgba(79,141,255,0.12);
+      --good: #34c56e;
+      --warn: #efb13a;
+      --bad: #ff5a5a;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #080d18;
+    --surface: #0f1829;
+    --surface-2: #152138;
+    --border: #203050;
+    --fg: #e8eefc;
+    --muted: #94a4c0;
+    --accent: #4f8dff;
+    --accent-strong: #76a8ff;
+    --accent-soft: rgba(79,141,255,0.12);
+    --good: #34c56e;
+    --warn: #efb13a;
+    --bad: #ff5a5a;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  h1, h2, h3 { font-family: var(--font-display); font-weight: 700; line-height: 1.08; text-wrap: balance; margin: 0; }
+  p { margin: 0; }
+  a { color: inherit; }
+  .wrap { width: 100%; max-width: var(--maxw); margin-inline: auto; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+  .mono { font-family: var(--font-mono); font-feature-settings: "tnum" 1; }
+  .eyebrow { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.22em; text-transform: uppercase; }
+
+  /* ---------- header ---------- */
+  header.nav {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+    background: color-mix(in srgb, var(--ink) 86%, transparent);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--ink-line);
+  }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 21; background: var(--ink); }
+  .nav .wrap { display: flex; align-items: center; gap: 16px; height: 62px; }
+  .brand { display: flex; align-items: center; gap: 10px; color: var(--ink-fg); text-decoration: none; }
+  .brand .wordmark { font-family: var(--font-display); font-weight: 800; font-size: 1.18rem; letter-spacing: -0.02em; }
+  .brand svg { display: block; }
+  .nav-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .soon-pill {
+    font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--ink-accent); border: 1px solid color-mix(in srgb, var(--ink-accent) 45%, transparent);
+    padding: 5px 10px; border-radius: 999px; white-space: nowrap;
+  }
+  .nav .btn-ghost { display: none; }
+  @media (min-width: 620px) { .nav .btn-ghost { display: inline-flex; } }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    font-family: var(--font-display); font-weight: 600; font-size: 0.98rem;
+    padding: 12px 22px; border-radius: 12px; border: 1px solid transparent;
+    cursor: pointer; text-decoration: none; transition: transform .12s ease, background .15s ease, border-color .15s ease; white-space: nowrap;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-strong); }
+  .btn-ghost { background: transparent; color: var(--ink-fg); border-color: var(--ink-line); }
+  .btn-ghost:hover { border-color: var(--ink-accent); }
+
+  /* ---------- hero (always dark) ---------- */
+  .hero {
+    position: relative; overflow: hidden;
+    background: radial-gradient(1200px 600px at 70% -10%, #13203a 0%, var(--ink) 60%);
+    color: var(--ink-fg);
+    margin-top: calc(-1 * env(safe-area-inset-top, 0px));
+    padding-top: calc(env(safe-area-inset-top, 0px) + 72px);
+    padding-bottom: 84px;
+    border-bottom: 1px solid var(--ink-line);
+  }
+  #pulse { position: absolute; inset: auto 0 0 0; width: 100%; height: 220px; opacity: 0.55; pointer-events: none; }
+  .hero .wrap { position: relative; z-index: 2; display: grid; grid-template-columns: 1fr; gap: 44px; align-items: center; }
+  @media (min-width: 940px) { .hero .wrap { grid-template-columns: 1.05fr 0.95fr; gap: 56px; } }
+  .hero .eyebrow { color: var(--ink-accent); margin-bottom: 18px; }
+  .hero h1 { font-size: clamp(2.3rem, 6vw, 3.9rem); font-weight: 800; letter-spacing: -0.03em; }
+  .hero h1 .hl { color: var(--ink-accent); }
+  .hero .lede { margin-top: 20px; font-size: clamp(1.05rem, 2.2vw, 1.28rem); color: var(--ink-muted); max-width: 34ch; }
+  .hero-cta { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .hero-note { margin-top: 14px; font-family: var(--font-mono); font-size: 0.78rem; color: var(--ink-muted); }
+
+  /* verdict card */
+  .verdict {
+    background: linear-gradient(180deg, var(--ink-2), #0b1322);
+    border: 1px solid var(--ink-line); border-radius: 20px; padding: 20px;
+    box-shadow: 0 30px 70px -30px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.04);
+  }
+  .verdict-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--ink-line); }
+  .verdict-site { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .verdict-site .nm { font-family: var(--font-display); font-weight: 700; font-size: 1.02rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tag-ok { font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--good); border: 1px solid color-mix(in srgb, var(--good) 45%, transparent); background: color-mix(in srgb, var(--good) 14%, transparent); padding: 4px 9px; border-radius: 999px; white-space: nowrap; }
+  .verdict-head { display: flex; align-items: baseline; gap: 12px; margin: 16px 0 4px; }
+  .verdict-head .big { font-family: var(--font-display); font-weight: 800; font-size: 1.5rem; }
+  .verdict-head .big .dot { display: inline-block; width: 13px; height: 13px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 20%, transparent); }
+  .rows { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid rgba(255,255,255,0.045); font-size: 0.9rem; }
+  .row:first-child { border-top: 0; }
+  .row .label { color: var(--ink-muted); display: flex; align-items: center; gap: 9px; }
+  .row .val { margin-left: auto; font-family: var(--font-mono); font-size: 0.84rem; color: var(--ink-fg); }
+  .stat-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 22%, transparent); }
+  .d-good { color: var(--good); background: var(--good); }
+  .d-warn { color: var(--warn); background: var(--warn); }
+  .spark { margin-top: 6px; }
+
+  /* ---------- sections ---------- */
+  section { padding-block: clamp(56px, 8vw, 100px); }
+  .section-head { max-width: 62ch; margin-bottom: 44px; }
+  .section-head .eyebrow { color: var(--accent); margin-bottom: 14px; }
+  .section-head h2 { font-size: clamp(1.8rem, 4vw, 2.7rem); letter-spacing: -0.02em; }
+  .section-head p { margin-top: 16px; color: var(--muted); font-size: 1.08rem; }
+
+  .band { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+
+  /* value strip */
+  .value { display: grid; grid-template-columns: 1fr; gap: 24px; align-items: center; }
+  @media (min-width: 860px) { .value { grid-template-columns: 1.1fr 0.9fr; gap: 48px; } }
+  .value h2 { font-size: clamp(1.7rem, 3.6vw, 2.5rem); letter-spacing: -0.02em; }
+  .value p { margin-top: 18px; color: var(--muted); font-size: 1.1rem; }
+  .value .quote { margin-top: 22px; padding-left: 18px; border-left: 3px solid var(--accent); font-style: italic; color: var(--fg); }
+  .scenario { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; }
+  .scenario .step { display: flex; gap: 14px; padding: 12px 0; border-top: 1px dashed var(--border); }
+  .scenario .step:first-child { border-top: 0; padding-top: 0; }
+  .scenario .n { font-family: var(--font-mono); color: var(--accent); font-weight: 600; flex: none; }
+  .scenario .step b { font-family: var(--font-display); }
+
+  /* features */
+  .grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
+  @media (min-width: 640px) { .grid { grid-template-columns: 1fr 1fr; } }
+  @media (min-width: 980px) { .grid { grid-template-columns: 1fr 1fr 1fr; } }
+  .card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; transition: border-color .15s ease, transform .15s ease; }
+  .card:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); transform: translateY(-2px); }
+  .band .card { background: var(--bg); }
+  .ico { width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); margin-bottom: 15px; }
+  .ico svg { width: 22px; height: 22px; }
+  .card h3 { font-size: 1.1rem; margin-bottom: 8px; }
+  .card p { color: var(--muted); font-size: 0.96rem; }
+
+  /* audience */
+  .aud { display: grid; grid-template-columns: 1fr; gap: 18px; }
+  @media (min-width: 820px) { .aud { grid-template-columns: 1fr 1fr 1fr; } }
+  .aud .card h3 { display: flex; align-items: center; gap: 10px; }
+  .aud .card .ico { width: 34px; height: 34px; margin: 0; }
+
+  /* pricing */
+  .planned-note { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--warn); margin-bottom: 14px; }
+  .tiers { display: grid; grid-template-columns: 1fr; gap: 18px; align-items: stretch; }
+  @media (min-width: 900px) { .tiers { grid-template-columns: 1fr 1fr 1fr; } }
+  .tier { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 26px; display: flex; flex-direction: column; }
+  .tier.feature { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 24px 50px -30px color-mix(in srgb, var(--accent) 60%, transparent); position: relative; }
+  .tier .badge { position: absolute; top: -12px; left: 26px; background: var(--accent); color: #fff; font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.14em; text-transform: uppercase; padding: 5px 11px; border-radius: 999px; }
+  .tier h3 { font-size: 1.18rem; }
+  .tier .price { margin: 12px 0 4px; font-family: var(--font-display); font-weight: 800; font-size: 2rem; letter-spacing: -0.02em; }
+  .tier .price small { font-size: 0.9rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  .tier .sub { color: var(--muted); font-size: 0.92rem; min-height: 2.6em; }
+  .tier ul { list-style: none; margin: 18px 0 0; padding: 16px 0 0; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+  .tier li { display: flex; gap: 10px; font-size: 0.94rem; color: var(--fg); }
+  .tier li svg { flex: none; width: 18px; height: 18px; color: var(--good); margin-top: 3px; }
+  .tier li.off { color: var(--muted); }
+  .tier li.off svg { color: var(--muted); }
+  .addon { margin-top: 20px; background: var(--surface-2); border: 1px dashed var(--border); border-radius: var(--radius); padding: 18px 22px; display: flex; gap: 14px; align-items: flex-start; }
+  .addon .ico { margin: 0; flex: none; }
+  .addon b { font-family: var(--font-display); }
+  .addon p { color: var(--muted); font-size: 0.94rem; margin-top: 4px; }
+
+  /* CTA */
+  .cta-wrap { background: linear-gradient(180deg, var(--ink-2), var(--ink)); color: var(--ink-fg); border-radius: 24px; padding: clamp(32px, 6vw, 64px); text-align: center; position: relative; overflow: hidden; border: 1px solid var(--ink-line); }
+  .cta-wrap .eyebrow { color: var(--ink-accent); }
+  .cta-wrap h2 { color: var(--ink-fg); font-size: clamp(1.9rem, 4.5vw, 3rem); letter-spacing: -0.02em; margin-top: 14px; }
+  .cta-wrap p { color: var(--ink-muted); margin: 16px auto 0; max-width: 46ch; font-size: 1.08rem; }
+  form.signup { margin: 30px auto 0; max-width: 480px; display: flex; gap: 10px; flex-wrap: wrap; }
+  form.signup input {
+    flex: 1 1 220px; min-width: 0; padding: 14px 16px; border-radius: 12px;
+    border: 1px solid var(--ink-line); background: rgba(255,255,255,0.04); color: var(--ink-fg);
+    font-family: var(--font-body); font-size: 1rem;
+  }
+  form.signup input::placeholder { color: var(--ink-muted); }
+  form.signup input:focus-visible { outline: 2px solid var(--ink-accent); outline-offset: 1px; }
+  form.signup .btn-primary { flex: 0 0 auto; }
+  .cta-done { margin: 26px auto 0; max-width: 480px; display: none; align-items: center; justify-content: center; gap: 10px; color: var(--good); font-family: var(--font-display); font-weight: 600; font-size: 1.1rem; }
+  .cta-done.show { display: flex; }
+  .alt-contact { margin-top: 22px; font-family: var(--font-mono); font-size: 0.82rem; color: var(--ink-muted); }
+  .alt-contact a { color: var(--ink-accent); text-decoration: none; }
+  .alt-contact .ph { color: var(--ink-fg); }
+
+  /* footer */
+  footer { border-top: 1px solid var(--border); background: var(--surface); }
+  footer .wrap { padding-block: 34px; display: flex; flex-wrap: wrap; gap: 18px 28px; align-items: center; justify-content: space-between; }
+  footer .brand { color: var(--fg); }
+  footer .f-meta { color: var(--muted); font-size: 0.88rem; }
+  footer .f-meta .mono { color: var(--fg); }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+<!-- ======================= HEADER ======================= -->
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="NetPulse home">
+      <svg width="30" height="30" viewBox="0 0 48 48" aria-hidden="true"><rect x="2" y="2" width="44" height="44" rx="11" fill="#1f6feb"/><path d="M6 24 H15 L19 13 L26 35 L30 24 H42" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="wordmark">NetPulse</span>
+    </a>
+    <div class="nav-right">
+      <span class="soon-pill">Coming soon</span>
+      <a class="btn btn-ghost" href="#notify">Get early access</a>
+    </div>
+  </div>
+</header>
+
+<!-- ======================= HERO ======================= -->
+<section class="hero" id="top">
+  <canvas id="pulse" aria-hidden="true"></canvas>
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">Coming soon · for macOS</div>
+      <h1>Walk in. Know if the network's solid — <span class="hl">or exactly what isn't</span>.</h1>
+      <p class="lede">NetPulse watches a site's network like a monitoring team that fits on your Mac — and tells you, at a glance, whether it's solid or something's wrong.</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#notify">Notify me at launch</a>
+        <a class="btn btn-ghost" href="#features">See what it does</a>
+      </div>
+      <p class="hero-note">Passive-first · multi-site · one-click client reports</p>
+    </div>
+
+    <!-- live verdict card -->
+    <div class="verdict" aria-label="Example NetPulse status readout">
+      <div class="verdict-top">
+        <div class="verdict-site">
+          <svg width="22" height="22" viewBox="0 0 48 48" aria-hidden="true"><rect x="2" y="2" width="44" height="44" rx="11" fill="#1f6feb"/><path d="M6 24 H15 L19 13 L26 35 L30 24 H42" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="nm">Smith Dental — Main St.</span>
+        </div>
+        <span class="tag-ok">Recognized</span>
+      </div>
+      <div class="verdict-head">
+        <span class="big"><span class="dot" aria-hidden="true"></span> All systems healthy</span>
+      </div>
+      <svg class="spark" width="100%" height="46" viewBox="0 0 320 46" preserveAspectRatio="none" aria-hidden="true">
+        <polyline id="sparkline" fill="none" stroke="#34c56e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points=""/>
+      </svg>
+      <div class="rows">
+        <div class="row"><span class="label"><span class="stat-dot d-good"></span>Internet</span><span class="val">up · <span id="lat">18</span> ms</span></div>
+        <div class="row"><span class="label"><span class="stat-dot d-good"></span>Cloudflare 1.1.1.1</span><span class="val">reachable</span></div>
+        <div class="row"><span class="label"><span class="stat-dot d-good"></span>Google 8.8.8.8</span><span class="val">reachable</span></div>
+        <div class="row"><span class="label"><span class="stat-dot d-good"></span>Quad9 9.9.9.9</span><span class="val">reachable</span></div>
+        <div class="row"><span class="label"><span class="stat-dot d-good"></span>WAN throughput</span><span class="val"><span id="wan">42</span> / 11 Mbps</span></div>
+        <div class="row"><span class="label"><span class="stat-dot d-warn"></span>Wi-Fi backhaul</span><span class="val">-68 dBm</span></div>
+        <div class="row"><span class="label"><span class="stat-dot d-good"></span>Devices seen</span><span class="val">23 online</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= VALUE ======================= -->
+<section class="band">
+  <div class="wrap value">
+    <div>
+      <div class="eyebrow" style="color:var(--accent);margin-bottom:14px;">Why it matters</div>
+      <h2>"Is it the network?" — answered before you open the laptop bag.</h2>
+      <p>Every engineer and consultant knows the moment: you arrive, everything's blamed on "the internet," and you've got no history and no baseline. NetPulse gives you both — the second you connect. See if the problem is the ISP, the Wi-Fi, the gateway, or a single device, without guessing and without hammering the network.</p>
+      <p class="quote">Hand the client a clean, branded report at the end of the visit. You look like the pro you are — and so does NetPulse.</p>
+    </div>
+    <div class="scenario">
+      <div class="step"><span class="n">1</span><div><b>Connect</b><br><span style="color:var(--muted)">Open NetPulse on your Mac. It recognizes the site or starts a new one automatically.</span></div></div>
+      <div class="step"><span class="n">2</span><div><b>Read the verdict</b><br><span style="color:var(--muted)">Internet, DNS, WAN, Wi-Fi and devices — green, amber or red, at a glance.</span></div></div>
+      <div class="step"><span class="n">3</span><div><b>Drill in</b><br><span style="color:var(--muted)">Timeline, map and per-device history show what happened — not just what's happening.</span></div></div>
+      <div class="step"><span class="n">4</span><div><b>Report</b><br><span style="color:var(--muted)">One click produces a professional report to leave with the client.</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= FEATURES ======================= -->
+<section id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">What NetPulse does</div>
+      <h2>Monitoring-team depth. Desktop-app simplicity.</h2>
+      <p>Built by a network engineer for the people who get called when the Wi-Fi "isn't working." Everything below runs quietly on a single Mac.</p>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-7 5 14L17 12h4"/></svg></div>
+        <h3>At-a-glance verdict</h3>
+        <p>One screen says whether the site is healthy right now — no dashboards to assemble, no metrics to interpret.</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3C9.5 5.5 9.5 18.5 12 21"/></svg></div>
+        <h3>Independent internet checks</h3>
+        <p>Continuously reaches Cloudflare (1.1.1.1), Google (8.8.8.8) and Quad9 (9.9.9.9), so you know instantly if it's the ISP or the LAN.</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 3 6-8"/><path d="M4 21h16"/></svg></div>
+        <h3>WAN throughput & usage</h3>
+        <p>Measures real bandwidth and tracks usage over time — passively, without saturating a line someone's trying to work on.</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
+        <h3>Device discovery</h3>
+        <p>Finds what's on the network with ARP and ping — no aggressive port scanning — and remembers each device site by site.</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13a10 10 0 0 1 14 0"/><path d="M8.5 16.5a5 5 0 0 1 7 0"/><circle cx="12" cy="20" r="1"/></svg></div>
+        <h3>Wi-Fi & backhaul health</h3>
+        <p>Signal and mesh backhaul strength in real dBm, so you catch a weak node before the client does.</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="3"/></svg></div>
+        <h3>Provider status feeds</h3>
+        <p>Pulls official status pages for the services a site depends on — so when it isn't you, you can prove it.</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></div>
+        <h3>Alerts when it drops</h3>
+        <p>Know the moment a site goes down — on your channels — instead of hearing about it from an angry phone call.</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+        <h3>History & timeline</h3>
+        <p>What happened overnight, last week, during the outage — kept and searchable, not lost the moment you look away.</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M6 8.5v3a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-3M12 13.5v2"/></svg></div>
+        <h3>Live network map</h3>
+        <p>See the topology — gateway, nodes and devices — and watch paths go green or red in real time.</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></div>
+        <h3>One-click client reports</h3>
+        <p>Branded, professional findings you can hand over or email — the deliverable that closes the consult.</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-6 9 6"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M9 20v-6h6v6"/></svg></div>
+        <h3>Every site, one place</h3>
+        <p>Manage many client sites, each with its own baseline, devices and alert setup — recognized automatically when you arrive.</p>
+      </div>
+      <div class="card">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
+        <h3>Quiet & respectful</h3>
+        <p>macOS-native and passive-first. It watches without stressing the network or getting in anyone's way.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= AUDIENCE ======================= -->
+<section class="band">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Who it's for</div>
+      <h2>If you get blamed for the network, this is your receipt.</h2>
+    </div>
+    <div class="aud">
+      <div class="card">
+        <h3><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>Network engineers</h3>
+        <p>The readouts you already think in — reachability, throughput, RF, device inventory — without standing up a NOC to get them.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v6c0 4-3.5 7-8 8-4.5-1-8-4-8-8V7z"/></svg></span>MSPs & IT consultants</h3>
+        <p>Baseline a new client, catch issues before they call, and leave every visit with a report that justifies the invoice.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1"/></svg></span>AI & automation consultants</h3>
+        <p>Before you deploy anything, confirm the client's environment is actually stable — and keep proving it afterward.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= PRICING ======================= -->
+<section id="pricing">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="planned-note">Planned pricing · subject to change before launch</div>
+      <h2>Start free. Keep what fits.</h2>
+      <p>Try everything, then settle on a one-time tool or ongoing monitoring — whichever matches the job.</p>
+    </div>
+    <div class="tiers">
+      <div class="tier">
+        <h3>Free trial</h3>
+        <div class="price">14 days</div>
+        <div class="sub">Every feature unlocked. See the full picture before you decide.</div>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Full history & alerts</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Professional reports</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>No commitment</li>
+        </ul>
+      </div>
+      <div class="tier">
+        <h3>One-time</h3>
+        <div class="price">$49.99</div>
+        <div class="sub">A pro diagnostic tool you own. Perfect for the occasional site visit or one-off fix.</div>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Live verdict & full checks</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Professional reports included</li>
+          <li class="off"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>Short history, no alerts</li>
+        </ul>
+      </div>
+      <div class="tier feature">
+        <span class="badge">Full monitoring</span>
+        <h3>Subscription</h3>
+        <div class="price">$10<small> /mo · or $100/yr</small></div>
+        <div class="sub">Always-on monitoring, per site. The real deal for anyone watching networks for a living.</div>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Unlimited history & alerting</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Reports, map & every feature</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>iPad / iPhone sensor support</li>
+        </ul>
+      </div>
+    </div>
+    <div class="addon">
+      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg></div>
+      <div><b>Hardware sensor — on the roadmap.</b><p>A dedicated sensor that keeps watching a site even when your Mac leaves the building. Sold separately; pairs with the subscription.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= CTA ======================= -->
+<section id="notify">
+  <div class="wrap">
+    <div class="cta-wrap">
+      <canvas id="pulse2" aria-hidden="true" style="position:absolute;inset:auto 0 0 0;width:100%;height:120px;opacity:.4;"></canvas>
+      <div style="position:relative;z-index:2;">
+        <div class="eyebrow">Launching soon</div>
+        <h2>Be first to know the network is fine.</h2>
+        <p>NetPulse is in private alpha. Leave your email and we'll tell you the moment early access opens.</p>
+        <form class="signup" id="signupForm" novalidate>
+          <input type="email" id="email" name="email" placeholder="you@company.com" aria-label="Email address" required autocomplete="email">
+          <button class="btn btn-primary" type="submit">Notify me</button>
+        </form>
+        <div class="cta-done" id="ctaDone"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>You're on the list — we'll be in touch at launch.</div>
+        <p class="alt-contact">No spam, ever — just one email the day early access opens.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= FOOTER ======================= -->
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="NetPulse">
+      <svg width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><rect x="2" y="2" width="44" height="44" rx="11" fill="#1f6feb"/><path d="M6 24 H15 L19 13 L26 35 L30 24 H42" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="wordmark">NetPulse</span>
+    </a>
+    <div class="f-meta">A <span class="mono">Stolle Automation</span> product · © 2026 · Coming soon for macOS</div>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // ---- pulse / EKG canvas (echoes the logo mark) ----
+    function makePulse(canvas, color, speed) {
+      if (!canvas) return;
+      var ctx = canvas.getContext("2d");
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      var w = 0, h = 0, t = 0;
+      function resize() {
+        w = canvas.clientWidth; h = canvas.clientHeight;
+        canvas.width = w * dpr; canvas.height = h * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      // one EKG beat as a function of x within a beat window
+      function beat(p) { // p in 0..1 across one beat cycle
+        var c = h * 0.5;
+        if (p < 0.40 || p > 0.78) return c;              // flat baseline
+        var x = (p - 0.40) / 0.38;                        // 0..1 across the spike group
+        // small up, big spike down-up, small dip — scaled EKG
+        if (x < 0.15) return c - (x / 0.15) * h * 0.06;
+        if (x < 0.30) return c - h * 0.06 + ((x - 0.15) / 0.15) * h * 0.06;
+        if (x < 0.45) return c - ((x - 0.30) / 0.15) * h * 0.34;   // tall up
+        if (x < 0.62) return c - h * 0.34 + ((x - 0.45) / 0.17) * h * 0.50; // down past baseline
+        if (x < 0.78) return c + h * 0.16 - ((x - 0.62) / 0.16) * h * 0.16; // back to baseline
+        return c;
+      }
+      function draw() {
+        ctx.clearRect(0, 0, w, h);
+        ctx.beginPath();
+        var beatW = 260;                 // px per beat
+        for (var px = 0; px <= w; px += 2) {
+          var pos = ((px + t) % beatW) / beatW;
+          var y = beat(pos);
+          if (px === 0) ctx.moveTo(px, y); else ctx.lineTo(px, y);
+        }
+        var grad = ctx.createLinearGradient(0, 0, w, 0);
+        grad.addColorStop(0, "rgba(91,155,255,0)");
+        grad.addColorStop(0.5, color);
+        grad.addColorStop(1, "rgba(91,155,255,0)");
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 2;
+        ctx.lineJoin = "round"; ctx.lineCap = "round";
+        ctx.shadowColor = color; ctx.shadowBlur = 10;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+      resize();
+      window.addEventListener("resize", resize);
+      if (reduce) { t = 90; draw(); return; }
+      (function loop() { t += speed; draw(); requestAnimationFrame(loop); })();
+    }
+    makePulse(document.getElementById("pulse"), "rgba(91,155,255,0.9)", 1.1);
+    makePulse(document.getElementById("pulse2"), "rgba(91,155,255,0.8)", 0.8);
+
+    // ---- sparkline in the verdict card ----
+    (function () {
+      var el = document.getElementById("sparkline");
+      if (!el) return;
+      var W = 320, H = 46, n = 48, pts = [];
+      var base = 26;
+      for (var i = 0; i < n; i++) {
+        var jitter = Math.sin(i * 0.7) * 5 + (Math.random() * 6 - 3);
+        var y = base + jitter;
+        y = Math.max(8, Math.min(H - 6, y));
+        pts.push([(i / (n - 1)) * W, y]);
+      }
+      function render() { el.setAttribute("points", pts.map(function (p) { return p[0].toFixed(1) + "," + p[1].toFixed(1); }).join(" ")); }
+      render();
+      if (reduce) return;
+      setInterval(function () {
+        pts.shift();
+        var last = pts[pts.length - 1][1];
+        var y = Math.max(8, Math.min(H - 6, last + (Math.random() * 10 - 5)));
+        pts.push([0, y]);
+        for (var i = 0; i < pts.length; i++) pts[i][0] = (i / (n - 1)) * W;
+        render();
+      }, 1400);
+    })();
+
+    // ---- gentle live numbers ----
+    if (!reduce) {
+      var lat = document.getElementById("lat"), wan = document.getElementById("wan");
+      setInterval(function () {
+        if (lat) lat.textContent = (15 + Math.floor(Math.random() * 8));
+        if (wan) wan.textContent = (38 + Math.floor(Math.random() * 9));
+      }, 1600);
+    }
+
+    // ---- signup (preview: no backend; wire to your list on deploy) ----
+    var form = document.getElementById("signupForm"), done = document.getElementById("ctaDone");
+    if (form) form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var email = document.getElementById("email");
+      if (!email.value || email.value.indexOf("@") < 1) { email.focus(); email.style.borderColor = "var(--bad)"; return; }
+      form.style.display = "none";
+      done.classList.add("show");
+    });
+
+    // ---- smooth in-page scrolling ----
+    document.querySelectorAll('a[href^="#"]').forEach(function (a) {
+      a.addEventListener("click", function (e) {
+        var id = a.getAttribute("href");
+        if (id.length < 2) return;
+        var target = document.querySelector(id);
+        if (target) { e.preventDefault(); target.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" }); }
+      });
+    });
+  })();
+</script>
+</body>
+</html>
